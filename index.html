@@ -1,0 +1,276 @@
+<html><link type="text/css" id="dark-mode" rel="stylesheet" href=""><style type="text/css" id="dark-mode-custom-style"></style><head>
+    <style type="text/css">
+        img {
+            max-width: 450px;
+        }
+        li {
+            list-style-type: none;
+        }
+        h1 {
+            line-height: 40%;
+            line-break: normal;
+        }
+        h2 {
+            line-height: 40%;
+        }
+        p {
+            line-height: 95%;
+            text-indent: 8px;
+            margin: 0;
+        }
+
+        .constant-scale {
+            width: 400px;
+        }
+
+        .center {
+            text-align: center;
+            padding: 3%;
+        }
+        .center p {
+            text-align: center; 
+        }
+
+        .cell {
+            display: inline-block;
+            text-align: center;
+            margin: 8px;
+        }
+        #side-by-side {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            flex-wrap: wrap;
+
+        }
+        #stacked {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+    </style>
+    <title>Image mosaics & rectification</title>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+</head>
+
+<body style="padding: 1%;">
+
+    <div class="center">
+        <h1 style="font-size: x-large; line-height: 40%;"> Morphing </h1>
+        <p><b>COMPSCI 194-26</b>: <i>Computational Photography & Computer Vision</i></p>
+        <p>Professors Alexei Efros & Angjoo Kanazawa</p>
+        <p>October 11th, 2021</p>
+        <p>Nick Kisel</p>
+    </div>
+
+    <h2>Homography</h2>
+
+    <h3>Shooting pictures</h3>
+
+    <p>
+        Last weekend, I went home to Sacramento. That means I took a train and
+        enjoyed my surroundings as I traversed the 100 mile journey. Along the
+        way, I snapped the following photos, and made mosaics out of them:
+    </p>
+
+    <div id="stacked">
+        <div id="side-by-side">
+            <div class="cell">
+                <img src="img/train_left.jpg" alt="Left train photo">
+                <p>The view towards the train stairwell</p>
+                <br>
+            </div>
+
+            <div class="cell">
+                <img src="img/train_right.jpg" alt="Right train photo">
+                <p>The view towards the aisle</p>
+                <br>
+            </div>
+
+        </div>
+
+        <p> 
+            Well, before you see the results, let's explain how this works. 
+            I selected eight corresponding points on each image I took; each
+            of those eight points represent the location of the same objects
+            as they change position based on the rotation of the camera.
+            <br>
+            These corresponding points allow us to compute the <i>homography</i>
+            of an image, which enables the transformations required for image
+            stitching. In reality, just four points are required for homography,
+            but additional points provide higher accuracy if well-placed. 
+        </p>
+
+        <p> I used a matrix very similar to the following to estimate my homography matrices:</p>
+        <img src="https://inst.eecs.berkeley.edu/~cs194-26/fa17/upload/files/proj6B/cs194-26-aap/h2.png" />
+        <p> 
+            Then, plugging in the (x, y) pairs for each of my selected points below,
+            I calculated the most likely entries of the 3x3 homography matrix via
+            <i>least squares</i>.
+        </p>
+
+
+        <div id="side-by-side">
+            <div class="cell">
+                <img src="img/train_left_smallpoints.jpg" alt="Left train photo annotated">
+                <img src="img/train_right_smallpoints.jpg" alt="Right train photo annotated">
+                <p>Eight input points around rectangles in the train.</p>
+                <br>
+            </div>
+
+        </div>
+
+        <div class="cell">
+            <img src="train_mosaic.png" alt="Right train photo annotated">
+            <p>A mosaic of the two extends the view using just one image.
+                As you can see, the rightmost photo is stretched such that its points
+                align onto the left photo's points, which allows the two photos to
+                extend each other.
+            </p>
+            <br>
+        </div>
+        
+        <div id="side-by-side">
+            <div class="cell">
+                <img src="img/scenic_left.jpg" alt="Left train photo">
+                <p>A view of Scenic Blvd. going eastward to campus.</p>
+                <br>
+            </div>
+
+            <div class="cell">
+                <img src="img/scenic_right.jpg" alt="Right train photo">
+                <p>Going westward to downtown.</p>
+                <br>
+            </div>
+
+        </div>
+
+        <div id="side-by-side">
+            <div class="cell">
+                <img src="img/scenic_leftpoints.jpg" alt="Left train photo annotated">
+                <img src="img/scenic_rightpoints.jpg" alt="Right train photo annotated">
+                <p>Eight input points around the sidewalk</p>
+                <br>
+            </div>
+
+        </div>
+
+        <div class="cell">
+            <img src="scenic_mosaic.png" alt="Right train photo annotated">
+            <p>A mosaic of the two.</p>
+            <br>
+        </div>
+
+        <div id="side-by-side">
+            <div class="cell">
+                <img src="img/amtrak_left.jpg" alt="Left train photo">
+                <img src="img/amtrak_right.jpg" alt="Right train photo">
+                <p>Berkeley's train station with a train in-station!</p>
+                <br>
+            </div>
+
+        </div>
+
+        <div id="side-by-side">
+            <div class="cell">
+                <img src="img/amtrak_leftpoints.jpg" alt="Left train photo annotated">
+                <img src="img/amtrak_rightpoints.jpg" alt="Right train photo annotated">
+                <p>Eight input points along the train.</p>
+                <br>
+            </div>
+
+        </div>
+
+        <div class="cell">
+            <img src="amtrak_mosaic.png" alt="Right train photo annotated">
+            <p>A mosaic of the two.</p>
+            <br>
+        </div>
+
+        <div id="side-by-side">
+            <div class="cell">
+                <img src="img/martinez_left.jpg" alt="Left train photo">
+                <img src="img/martinez_right.jpg" alt="Right train photo">
+                <p>Martinez's train station from my train.</p>
+                <br>
+            </div>
+
+        </div>
+
+        <div id="side-by-side">
+            <div class="cell">
+                <img src="img/martinez_leftpoints.jpg" alt="Left train photo annotated">
+                <img src="img/martinez_rightpoints.jpg" alt="Right train photo annotated">
+                <p>Eight input points along the ouside of the station.</p>
+                <br>
+            </div>
+
+        </div>
+
+        <div class="cell">
+            <img src="martinez_mosaic.png" alt="Right train photo annotated">
+            <p>A mosaic of the two.</p>
+            <br>
+        </div>
+    </div>
+
+    <hr>
+
+    <div id="stacked">
+        <h3>Rectification</h3>
+
+        <p> 
+            Another possible application of homography is the extraction of non-square
+            textures from the photo's environment into a square (or other shape of your choosing).
+            By nature of matrix transformations, the opposite can also be done to <i>project</i>
+            a texture onto some object in a photo.
+            <br>
+            In this case, I grabbed the train map from the wall and the textured sidewalk.
+        </p>
+
+        <div id="side-by-side">
+            <div class="cell">
+                <img src="train_rect_points.jpg" alt="Train poster">
+                <p>What's on that train poster?</p>
+                <br>
+            </div>
+            
+            <div class="cell">
+                <img src="train_rect.png" alt="Train poster">
+                <p>Ah, yes, very clear.</p>
+                <br>
+            </div>
+        </div>
+        <p>
+            
+        </p>
+
+        <div id="side-by-side">
+            <div class="cell">
+                <img src="scenic_rect_points.jpg" alt="">
+                <p>Let's feel the bumps of the pedestrian crossing.</p>
+                <br>
+            </div>
+
+            <div class="cell">
+                <img src="scenic_rect.png" alt="">
+                <p>Ah, yes, so ADA-accessible.</p>
+                <br>
+            </div>
+        </div>
+
+
+
+        <hr>
+        <hr>
+        <hr>
+        <hr>
+        <hr>
+        <hr>
+        <hr>
+
+
+    <hr>
+
+
+</body></html>
