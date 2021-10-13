@@ -1,20 +1,10 @@
 
-from matplotlib.pyplot import get_current_fig_manager
 import skimage.io as skio
 import skimage.draw as draw
 import numpy as np
 import matplotlib.pyplot as plt
 import pickle
 import re
-import subprocess
-import cv2
-
-from scipy.spatial import Delaunay
-from os import listdir
-from os.path import isfile, join
-
-#zion_left = skio.imread("img/zion_left.jpg")
-#zion_right = skio.imread("img/zion_right.jpg")
 
 def show(img):
     skio.imshow(img)
@@ -344,7 +334,7 @@ def warp(image1_name, image2_name, select = False):
 
     if select:
         select_points(left, 8, image1_name)
-        select_points(zion_right, 8, image2_name)
+        select_points(right, 8, image2_name)
 
     left_points = retrieve_points(image1_name)
     right_points = retrieve_points(image2_name)
@@ -367,15 +357,15 @@ def rect(image1_name, select = False):
     min_dim = min(image.shape[0], image.shape[1])
     square = [[0, 0], [0, min_dim], [min_dim, min_dim], [min_dim, 0]]
     H = computeH(square, image_points)
-    rectified = cv2.warpPerspective(image, H, image.shape[:2])
-    #rectified = rectify(image, H)
+    #rectified = cv2.warpPerspective(image, H, image.shape[:2])
+    rectified = rectify(image, H)
     show(rectified)
 
 #warp("train_left_small", "train_right_small", select = False)
 #warp("martinez_left", "martinez_right", select = False)
 # warp("amtrak_left", "amtrak_right", select = False)
 #select_points(skio.imread(jpg_name("scenic_right")), 8, "scenic_right")
-#warp("scenic_left", "scenic_right", select = False)
+warp("scenic_left", "scenic_right", select = False)
 #display_points("train_left_small", "train_right_small")
 # display_points("amtrak_left", "amtrak_right")
 # display_points("martinez_left", "martinez_right")
