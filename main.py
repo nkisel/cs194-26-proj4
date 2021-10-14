@@ -5,6 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pickle
 import re
+import cv2
 
 def show(img):
     skio.imshow(img)
@@ -265,11 +266,14 @@ def warpImage(image, image2, H):
 
     return result_image
 
-def rectify(image, H):
+def rectify(image, image_points, H):
     """ Rectify a small square section of an image. """
+    #image = np.flipud(image)
     shape = image.shape
+
     max_x = shape[1]
     max_y = shape[0]
+    min_dim = min(max_x, max_y)
 
     bottom_left = np.matrix([[0], [max_y], [1]])
     bottom_right = np.matrix([[max_x], [max_y], [1]])
@@ -278,6 +282,9 @@ def rectify(image, H):
 
     corners = [bottom_left, bottom_right,
                        top_left, top_right]
+
+    
+    corners = [np.matrix([[image_point[0]], [image_point[1]], [1]]) for image_point in image_points]
 
     corners = [H @ point for point in corners]
     corners = [point / point[2] for point in corners]
@@ -321,7 +328,6 @@ def rectify(image, H):
     y_orig = y_orig[overlap].astype(np.int)
 
     result_image[y_orig, x_orig] = image[rr, cc]
-    result_image[int(transformed_y_min):int(transformed_y_max),int(transformed_x_min):int(transformed_x_max)] = [199, 199, 199]
 
     return result_image
 
@@ -357,19 +363,23 @@ def rect(image1_name, select = False):
     min_dim = min(image.shape[0], image.shape[1])
     square = [[0, 0], [0, min_dim], [min_dim, min_dim], [min_dim, 0]]
     H = computeH(square, image_points)
+
+    # Check if you're getting a similarly square image
     #rectified = cv2.warpPerspective(image, H, image.shape[:2])
-    rectified = rectify(image, H)
+
+    # Compute it manually
+    rectified = rectify(image, image_points, H)
     show(rectified)
 
 #warp("train_left_small", "train_right_small", select = False)
 #warp("martinez_left", "martinez_right", select = False)
 # warp("amtrak_left", "amtrak_right", select = False)
 #select_points(skio.imread(jpg_name("scenic_right")), 8, "scenic_right")
-warp("scenic_left", "scenic_right", select = False)
+#warp("scenic_left", "scenic_right", select = False)
 #display_points("train_left_small", "train_right_small")
 # display_points("amtrak_left", "amtrak_right")
 # display_points("martinez_left", "martinez_right")
-rect("scenic_right", select = False)
-#rect("train_left_small2", select = True)
+#rect("scenic_right", select = False)
+rect("train_left_small2", select = False)
 
 #sky()
