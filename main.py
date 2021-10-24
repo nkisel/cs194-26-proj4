@@ -484,7 +484,7 @@ def get_feature_patches(patches):
     Reference Figure 4 of 
     https://inst.eecs.berkeley.edu/~cs194-26/fa21/hw/proj4/Papers/MOPS.pdf
     """
-    gaussian = cv2.getGaussianKernel(8, 2)
+    gaussian = cv2.getGaussianKernel(32, 3)
     gaussian = np.outer(gaussian, gaussian)
     blurred_patches = []
     for patch in patches:
@@ -572,12 +572,13 @@ def ransac_iterations(feature_map, iterations):
             new_p = np.array(new_p[:2].flatten()).reshape(1, 2).astype(np.int)
 
             distance = harris.dist2(p, new_p)
-            if distance < 400:
+            if distance < 40:
                 this_set.append([key, feature_map[key]])
         
-        if len(largest_set[0]) < len(this_set):
+        if len(largest_set[0]) <= len(this_set):
             largest_set = (np.array(this_set), [image1_points, image2_points], H)
         print(len(largest_set[0]))
+    
     return largest_set #len(largest_set[0])
 
 
@@ -592,13 +593,25 @@ def ransac_iterations(feature_map, iterations):
 #rect("scenic_right", select = False)
 #rect("train_left_small2", select = False)
 
-amtrak_left = skio.imread(jpg_name("martinez_left"))
-left_corners = detect_corners(amtrak_left)
-amtrak_right = skio.imread(jpg_name("martinez_right"))
-right_corners = detect_corners(amtrak_right)
-feature_map = compute_features(amtrak_left, amtrak_right, left_corners, right_corners, False)
+left = skio.imread(jpg_name("train_left_small"))
+left_corners = detect_corners(left)
+right = skio.imread(jpg_name("train_right_small"))
+right_corners = detect_corners(right)
+feature_map = compute_features(left, right, left_corners, right_corners, True)
 largest_set = ransac_iterations(feature_map, 1200)
-warp_fast(amtrak_left, amtrak_right, largest_set[1][0], largest_set[1][1])
-#warp_fast(amtrak_left, amtrak_right, largest_set[1][1], largest_set[1][0])
 
-#sky()
+display = True
+if display:
+    for key in largest_set[0]:
+        plt.subplot(2, 1, 1)
+        plt.imshow(left)
+        plt.scatter(key[0][1], key[0][0], marker="x", color="blue", s=160)
+
+        plt.subplot(2, 1, 2)
+        plt.imshow(right)
+        plt.scatter(key[1][1], key[1][0],
+                    marker="x", color="red", s=200)
+    plt.show()
+
+#warp_fast(left, right, largest_set[0][0], largest_set[0][1])
+show(warpImage(left, right, np.linalg.inv(largest_set[2])))
