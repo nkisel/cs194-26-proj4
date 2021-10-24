@@ -1,4 +1,6 @@
 
+from matplotlib import image
+from skimage import feature
 import skimage.io as skio
 import skimage.draw as draw
 import numpy as np
@@ -6,6 +8,13 @@ import matplotlib.pyplot as plt
 import pickle
 import re
 import cv2
+import scipy
+import harris
+import random
+
+def ssd(A,B):
+  dif = A.ravel() - B.ravel()
+  return np.dot(dif, dif)
 
 def show(img):
     skio.imshow(img)
@@ -252,17 +261,17 @@ def warpImage(image, image2, H):
     # Blend the two images around the corners.
     alpha = np.cos(np.linspace(0, 3.141592628/2, int(image.shape[1]/2))) ** 8
     alpha = np.hstack([np.ones(int(image.shape[1]/2), dtype="float64"), alpha])
-    finalAlpha = alpha
+    alpha_mask = alpha
     for _ in range(image.shape[0] - 1):
-        finalAlpha = np.vstack([finalAlpha, alpha])
-    gray = finalAlpha.reshape((finalAlpha.shape[0], finalAlpha.shape[1], 1))
-    finalAlpha = np.dstack([gray, gray, gray])
+        alpha_mask = np.vstack([alpha_mask, alpha])
+    gray = alpha_mask.reshape((alpha_mask.shape[0], alpha_mask.shape[1], 1))
+    alpha_mask = np.dstack([gray, gray, gray])
 
-    alpha_image1 = image * finalAlpha
+    alpha_image1 = image * alpha_mask
 
     result_image[offset_y : image1_end_y, offset_x : image1_end_x] = \
-        alpha_image1 * finalAlpha + \
-        result_image[offset_y : image1_end_y, offset_x : image1_end_x] * (1 - finalAlpha)
+        alpha_image1 * alpha_mask + \
+        result_image[offset_y : image1_end_y, offset_x : image1_end_x] * (1 - alpha_mask)
 
     return result_image
 
@@ -349,6 +358,11 @@ def warp(image1_name, image2_name, select = False):
     warp = warpImage(left, right, H)
     show(warp)
 
+def warp_fast(left, right, left_points, right_points):
+    H = computeH(left_points, right_points)
+    warp = warpImage(left, right, H)
+    show(warp)
+
 def rect(image1_name, select = False):
     """ Select a square on a provided image. """
     image = skio.imread(jpg_name(image1_name))
@@ -371,6 +385,202 @@ def rect(image1_name, select = False):
     rectified = rectify(image, image_points, H)
     show(rectified)
 
+def max_neighbor(h, point, dist):
+    """ Find the best point in an area DIST around POINT. """
+    #print(h, point, dist)
+    area = h[point[0] - dist : point[0] + dist, point[1] - dist : point[1] + dist]
+
+    if area.size == 0:
+        return [point], point
+
+    x, y = np.mgrid[point[0] - dist : point[0] + dist, point[1] - dist : point[1] + dist]
+    removals = np.transpose(np.vstack([x.flatten(), y.flatten()]))
+    #best_point = np.unravel_index(np.argmax(area), area.shape)
+    max_val = np.max(area)
+    best_point = point + np.array(np.where(area == max_val)).flatten() - dist
+    return removals, best_point
+
+
+def point_suppression(points, h, n):
+    """ Increase radius until <= N points remain. """
+    dist = 10
+    points_copy = points.copy()
+    new_points = []
+
+    while len(points_copy) > n:
+        while len(points_copy) > 0:
+            removals, best_point = max_neighbor(h, points_copy[0], dist)
+            new_points.append(best_point)
+
+            points_copy_idx = (points_copy[:, None] == removals).all(-1).any(-1)
+            points_copy_idx = np.invert(points_copy_idx)
+            points_copy = points_copy[points_copy_idx]
+        dist += 4
+        points_copy = np.array(new_points.copy())
+        new_points = []
+    return points_copy
+
+def detect_corners(im, display = False):
+    # SECTION 2
+    # Generate a greyscale (1D color) image from multiple
+    # color channels. Extract the Harris corners.
+    if len(im.shape) == 3:
+        average = np.zeros((im.shape[0], im.shape[1]))
+        for i in range(0, im.shape[2]):
+            average += im[:, :, i]
+        average = average / im.shape[2]
+    h, corners = harris.get_harris_corners(average)
+
+    corners = corners.T
+
+    # SECTION 3: Suppress points until N are left.
+    corners = point_suppression(corners, h, 400)
+
+    if display:
+        point_display_name = jpg_name("harris_corners")
+
+        plt.imshow(im)
+        print(len(corners[0]))
+        for i in range(0, min(250, len(corners))):
+            plt.scatter(corners[i][1], corners[i][0], color="red")
+            plt.annotate(str(i), (corners[i][1], corners[i][0]))
+        plt.savefig(point_display_name)
+        plt.close()
+
+        point_display = skio.imread(point_display_name)
+        skio.imshow(point_display)
+        skio.show()
+    
+    return corners
+
+def local_patches(image, points, size = 20):
+    """ 
+    Given an image and its suppressed Harris points, gather 8x8
+    patches for each feature.
+    """
+
+    if len(image.shape) == 3:
+        average = np.zeros((image.shape[0], image.shape[1]))
+        for i in range(0, image.shape[2]):
+            average += image[:, :, i]
+        image = average / image.shape[2]
+
+    patches = []
+    for point in points:
+        if point[1] - size < 0 or \
+           point[1] + size > image.shape[1] or \
+           point[0] - size < 0 or \
+           point[0] + size > image.shape[0]:
+            # Don't match a feature on the edge of the image, 
+            # as there is not enough information to match.
+            continue
+        patch = image[point[0] - size : point[0] + size, point[1] - size : point[1] + size]
+        patches.append([point, patch])
+    return patches
+
+def get_feature_patches(patches):
+    """ 
+    Sample large patches every 5 pixels relative to the detection scale.
+    Reference Figure 4 of 
+    https://inst.eecs.berkeley.edu/~cs194-26/fa21/hw/proj4/Papers/MOPS.pdf
+    """
+    gaussian = cv2.getGaussianKernel(8, 2)
+    gaussian = np.outer(gaussian, gaussian)
+    blurred_patches = []
+    for patch in patches:
+        blurred_patch = scipy.signal.convolve2d(patch[1], gaussian, mode="valid", boundary="wrap")
+        blurred_patch = (blurred_patch - np.mean(blurred_patch))/np.std(blurred_patch)
+        blurred_patches.append((patch[0], blurred_patch))
+    return blurred_patches
+
+def compute_map_features(feat1, feat2):
+    feature_map = {}
+    for i in range(len(feat1)):
+        corner_NNs = []
+        for j in range(len(feat2)):
+            corner_NNs.append((feat2[j][0], ssd(feat1[i][1], feat2[j][1])))
+        corner_NNs.sort(key = lambda x: x[1])
+        thresh = corner_NNs[0][1] / corner_NNs[1][1]
+        if thresh < 0.2:
+            feature_map[tuple(feat1[i][0])] = corner_NNs[0][0]
+    return feature_map
+
+def compute_features(image1, image2, points1, points2, display = False):
+    patches1 = local_patches(image1, points1)
+    patches2 = local_patches(image2, points2)
+    print(patches1)
+    feat1 = get_feature_patches(patches1)
+    feat2 = get_feature_patches(patches2)
+    feature_map = compute_map_features(feat1, feat2)
+    if display:
+        keys = np.array(list(feature_map.keys()))
+        plt.imshow(image1)
+        plt.scatter(keys[:, 1], keys[:, 0],
+                    marker="x", color="red", s=200)
+        plt.show()
+        for key in feature_map:
+            plt.subplot(2, 1, 1)
+            plt.imshow(image1)
+            plt.scatter(key[1], key[0], marker="x", color="blue", s=160)
+
+            plt.subplot(2, 1, 2)
+            plt.imshow(image2)
+            plt.scatter(feature_map[key][1], feature_map[key][0],
+                        marker="x", color="red", s=200)
+            plt.show()
+    assert(len(feature_map) >= 4)
+    return feature_map
+
+def ransac(feature_map):
+    random_feature_set = random.sample(list(feature_map.keys()), 4)
+    image1_features = np.array([random_feature_set[i] for i in range(len(random_feature_set))])
+    image2_features = np.array([feature_map[random_feature_set[i]] for i in range(len(random_feature_set))])
+    image1_features_ = image1_features.copy()
+    image2_features_ = image2_features.copy()
+    image1_features_[:, 0] = image1_features[:, 1]
+    image1_features_[:, 1] = image1_features[:, 0]
+    image2_features_[:, 0] = image2_features[:, 0]
+    image2_features_[:, 1] = image2_features[:, 0]
+
+    #image1_features = np.stack([image1_features[:, 1], image1_features[:, 0]], axis = 1)
+    #image2_features = np.stack([image2_features[:, 1], image2_features[:, 0]], axis = 1)
+    points1_name = "./generated/1.points"
+    points2_name = "./generated/2.points"
+
+    #pickle.dump(image1_features, open(points1_name, "wb"))
+    #pickle.dump(image1_features, open(points2_name, "wb"))
+
+    return image1_features_, image2_features_
+
+def ransac_iterations(feature_map, iterations):
+    best_match = None
+    largest_set = ([], [])
+    for i in range(iterations):
+        image1_points, image2_points = ransac(feature_map)
+        H = computeH(image1_points, image2_points)
+        this_set = []
+        for key in feature_map:
+            # Get the feature match for P and see if H @ P maps onto that.
+            p = np.array([[key[1]], [key[0]], [1]])
+            new_p = np.array([[feature_map[key][1]],
+                             [feature_map[key][0]],
+                             [1]])
+            new_p = H @ new_p
+            new_p = new_p / new_p[2]
+
+            p = p[:2].flatten().reshape(1, 2)
+            new_p = np.array(new_p[:2].flatten()).reshape(1, 2).astype(np.int)
+
+            distance = harris.dist2(p, new_p)
+            if distance < 400:
+                this_set.append([key, feature_map[key]])
+        
+        if len(largest_set[0]) < len(this_set):
+            largest_set = (np.array(this_set), [image1_points, image2_points], H)
+        print(len(largest_set[0]))
+    return largest_set #len(largest_set[0])
+
+
 #warp("train_left_small", "train_right_small", select = False)
 #warp("martinez_left", "martinez_right", select = False)
 # warp("amtrak_left", "amtrak_right", select = False)
@@ -380,6 +590,15 @@ def rect(image1_name, select = False):
 # display_points("amtrak_left", "amtrak_right")
 # display_points("martinez_left", "martinez_right")
 #rect("scenic_right", select = False)
-rect("train_left_small2", select = False)
+#rect("train_left_small2", select = False)
+
+amtrak_left = skio.imread(jpg_name("martinez_left"))
+left_corners = detect_corners(amtrak_left)
+amtrak_right = skio.imread(jpg_name("martinez_right"))
+right_corners = detect_corners(amtrak_right)
+feature_map = compute_features(amtrak_left, amtrak_right, left_corners, right_corners, False)
+largest_set = ransac_iterations(feature_map, 1200)
+warp_fast(amtrak_left, amtrak_right, largest_set[1][0], largest_set[1][1])
+#warp_fast(amtrak_left, amtrak_right, largest_set[1][1], largest_set[1][0])
 
 #sky()
