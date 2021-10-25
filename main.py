@@ -189,11 +189,6 @@ def warpImage(image, image2, H):
     top_left = np.matrix([[0], [0], [1]])
     top_right = np.matrix([[max_x], [0], [1]])
 
-    """"bottom_left = np.matrix([[max_y], [0], [1]])
-    bottom_right = np.matrix([[max_y], [max_x], [1]])
-    top_left = np.matrix([[0], [0], [1]])
-    top_right = np.matrix([[0], [max_x], [1]])"""
-
     corners = [bottom_left, bottom_right,
                        top_left, top_right]
     print("H:", H)
@@ -610,16 +605,6 @@ def ransac_iterations(feature_map, iterations):
         if len(largest_set[0]) < len(pairs) and len(pairs) > 0:
             H = computeH(points1, points2)
             largest_set = (np.array(pairs), [image1_points, image2_points], H)
-            """for key in largest_set[0]:
-                plt.subplot(2, 1, 1)
-                plt.imshow(left)
-                plt.scatter(key[0][1], key[0][0], marker="x", color="blue", s=160)
-
-                plt.subplot(2, 1, 2)
-                plt.imshow(right)
-                plt.scatter(key[1][1], key[1][0],
-                            marker="x", color="red", s=200)
-            plt.show()"""
         print(len(largest_set[0]))
     
     return largest_set #len(largest_set[0])
@@ -671,7 +656,7 @@ def autostitch(left_name, right_name, display = True):
     show(warpImage(left, right, largest_set[2]))
 
 autostitch("train_left_small", "train_right_small")
-#autostitch("carquinez_left", "carquinez_right")
+autostitch("carquinez_left", "carquinez_right")
 autostitch("amtrak_left", "amtrak_right")
 autostitch("scenic_left", "scenic_right")
 autostitch("sky_house", "sky_right")
