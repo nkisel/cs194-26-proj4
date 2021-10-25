@@ -259,18 +259,212 @@
             </div>
         </div>
 
+    </div>
+
+        <hr>
+        <hr>
+        <hr>
+        <hr>
+        <hr>
+        <hr>
+        <hr>
+        <hr>
 
 
-        <hr>
-        <hr>
-        <hr>
-        <hr>
-        <hr>
-        <hr>
-        <hr>
+    <div id="stacked">
+        <h2>Auto-stitching</h2>
+        <div id="stacked">
 
+            <p> 
+                Overall, the procedure to automatically stitch two images is as follows:
+
+                <h3>Retrieve the Harris corners</h3>
+                <div id="side-by-side">
+                    <div class="cell">
+                        <img src="train_small_harris.jpeg" alt="Auto train points">
+                        <p>Harris points on the left side.</p>
+                        <br>
+                    </div>
+        
+                    <div class="cell">
+                        <img src="train_small_right_harris.jpeg" alt="Auto train points">
+                        <p>Harris points on the right side.</p>
+                        <br>
+                    </div>
+                </div>
+                Harris corners are used as identifiers for features of images, and we'll use them to match our images' features.
+                Running <code>harris.py::harris_corners</code> on my image outputs every Harris corner over five pixels from any image border. <br>
+                However, there are a lot - perhaps not too many to be impossible to match and compute, but certainly enough
+                to make waiting for it excruciatingly painful. <br> 
+                Additionally, not all features appear on both images,
+                so not every Harris corner can correspond to another.
+                <br>
+
+                <h3>Suppress points</h3>
+                <div id="side-by-side">
+                    <div class="cell">
+                        <img src="train_small_harris.jpeg" alt="Auto train points">
+                        <p>Harris points on the left side.</p>
+                        <br>
+                    </div>
+
+                    <div class="cell">
+                        <img src="train_small_elimination.jpeg" alt="Auto train points">
+                        <p>After point suppression</p>
+                        <br>
+                    </div>
+                </div>
+                
+                To reduce the number of points in the image, single out the "strongest" corner 
+                in a given radius around each point, and eliminate the rest. <br>
+
+                If this process doesn't remove enough points, just do it again more powerfully! <br>
+
+                I implemented ANMS as outlined in the paper, starting by scanning within a distance of 10 pixels around any given point;
+                as I removed more points I added an additional 4 pixels to this distance. <br>
+
+                Then, I ran point suppression until I reached 850 points. For a 1200x900 image, I'd usually start with over 4000 points,
+                so I'd usually narrow down to just one in five.
+
+                
+                <h3>Match feature descriptors</h3>
+                <div id="side-by-side">
+                    <div class="cell">
+                        <img src="train_small_localpatch_zoomout.jpeg" alt="Auto train points">
+                        <p>(Zoomed out 80x80 patch for context)</p>
+                        <br>
+                    </div>
+        
+                    <div class="cell">
+                        <img src="train_small_localpatch.jpeg" alt="Auto train points">
+                        <p>40x40 local patch</p>
+                        <br>
+                    </div>
+
+                    <div class="cell">
+                        <img src="train_small_blurpatch.jpeg" alt="Auto train points">
+                        <p>Gaussian blurred down to 8x8</p>
+                        <br>
+                    </div>
+                </div>
+
+                For each corner point, extract an 8x8 patch around it, sampled from a 40x40 Gaussian blurred window around that corner. 
+                The patches have their mean subtracted and standard deviation divided from them for normalization. <br>
+                The, match points by comparing their respective feature descriptors using SSD.<br>
+                A correspondence is defined between two points if the ratio of the SSD error for the two descriptors and the 
+                SSD between the descriptor for the second-best match is less than 0.15;<br>
+                that means that there's one particularly clear match for a descriptor, rather than two or more that are indistinguishable. 
+
+                <h3>RANSAC</h3>
+                <div id="side-by-side">
+                    <div class="cell">
+                        <img src="train_small_autopoints.jpeg" alt="Auto train points">
+                        <p>The matched patches, numbered.</p>
+                        <br>
+                    </div>
+        
+                    <div class="cell">
+                        <img src="train_small_autostitch.jpeg" alt="Right train photo">
+                        <p>The autostitched result</p>
+                        <br>
+                    </div>
+                </div>
+
+                After retrieving a set of at least four matches, we can compute a homography matrix. However, to eliminate the effect of mismatches and outliers,
+                the RANSAC algorithm comes in handy.<br> For each of 1200 iterations, 4 random points are sampled as inputs, and the number of matched features between
+                the two images informs which homography matrix is best suited towards the final autostitching.<br> After recomputing a final least squares
+                homography matrix between all of the &gt;4 matched features, the images are stitched together.
+            </p>
+        </div>
+    </div>
+    <hr>
+    <div id="stacked">
+        <div id="stacked">
+            
+            <h3>Results</h3>
+
+            <div id="side-by-side">
+                <div class="cell">
+                    <div class="cell">
+                        <img src="martinez_autopoints.jpeg" alt="Auto train points">
+                        <p>The matched patches, numbered.</p>
+                        <br>
+                    </div>
+        
+                    <div class="cell">
+                        <img src="martinez_autostitch2.jpeg" alt="Right train photo">
+                        <p>Martinez</p>
+                        <br>
+                    </div>
+                </div>
+            </div>
+    
+            
+            <div id="side-by-side">
+                <div class="cell">
+                    <div class="cell">
+                        <img src="scenic_autopoints.jpeg" alt="Auto train points">
+                        <p>The matched patches, numbered.</p>
+                        <br>
+                    </div>
+        
+                    <div class="cell">
+                        <img src="scenic_autostitch.jpeg" alt="Right train photo">
+                        <p>Scenic Boulevard</p>
+                        <br>
+                    </div>
+                </div>
+            </div>
+
+            <div id="side-by-side">
+                <div class="cell">
+                    <div class="cell">
+                        <img src="carquinez_autopoints.jpeg" alt="Auto train points">
+                        <p>The matched patches, numbered.</p>
+                        <br>
+                    </div>
+        
+                    <div class="cell">
+                        <img src="carquinez_autostitch.jpeg" alt="Right train photo">
+                        <p>The Carquinez bridge</p>
+                        <br>
+                    </div>
+                </div>
+            </div>
+
+            <div id="side-by-side">
+                <div class="cell">
+                    <div class="cell">
+                        <img src="amtrak_autopoints.jpeg" alt="Auto train points">
+                        <p>Lots of great corners on the train!</p>
+                        <br>
+                    </div>
+        
+                    <div class="cell">
+                        <img src="amtrak_autostitch.jpeg" alt="Right train photo">
+                        <p>Looks like I took a wrong turn. Anyone know how to get from "Benley" to Berkeley?</p>
+                        <br>
+                    </div>
+                </div>
+            </div>
+
+            <div id="side-by-side">
+                <div class="cell">
+                    <div class="cell">
+                        <img src="sky_autopoints.jpeg" alt="Auto train points">
+                        <p>The matched patches, numbered.</p>
+                        <br>
+                    </div>
+        
+                    <div class="cell">
+                        <img src="sky_autostitch.jpeg" alt="Right train photo">
+                        <p>The sky above my house.</p>
+                        <br>
+                    </div>
+                </div>
+            </div>
+        </div>
 
     <hr>
-
-
-</body></html>
+</body>
+</html>
